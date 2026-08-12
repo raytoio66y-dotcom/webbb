@@ -25,10 +25,6 @@ Deno.serve(async (req: Request) => {
       .eq("id", 1)
       .maybeSingle();
 
-    if (contentError) {
-      console.error("Site content query error:", contentError.message);
-    }
-
     if (contentError || content?.data?.adminPasscode !== adminPasscode) {
       return json({ error: "غير مصرح" }, 403);
     }
@@ -45,13 +41,13 @@ Deno.serve(async (req: Request) => {
     }, { onConflict: "id" });
 
     if (error) {
-      console.error("Telegram settings save failed:", error.message);
+      console.error("Telegram settings save failed", error);
       return json({ error: "تعذر حفظ الإعدادات" }, 500);
     }
 
     return json({ success: true });
   } catch (error) {
-    console.error("Telegram config failed:", error);
+    console.error("Telegram config failed", error);
     return json({ error: "تعذر حفظ الإعدادات" }, 500);
   }
 });

@@ -32,10 +32,6 @@ Deno.serve(async (req: Request) => {
       .eq("id", 1)
       .maybeSingle();
 
-    if (settingsError) {
-      console.error("Telegram settings query error:", settingsError.message);
-    }
-
     if (settingsError || !settings?.bot_token || !settings.chat_id) {
       return json({ error: "لم يتم إعداد قناة استقبال الطلبات بعد" }, 503);
     }
@@ -63,14 +59,13 @@ Deno.serve(async (req: Request) => {
     );
 
     if (!telegramResponse.ok) {
-      const tgErr = await telegramResponse.text();
-      console.error("Telegram delivery failed:", telegramResponse.status, tgErr);
+      console.error("Telegram delivery failed", telegramResponse.status);
       return json({ error: "تعذر إرسال الطلب حالياً" }, 502);
     }
 
     return json({ success: true });
   } catch (error) {
-    console.error("Order delivery failed:", error);
+    console.error("Order delivery failed", error);
     return json({ error: "تعذر إرسال الطلب حالياً" }, 500);
   }
 });
