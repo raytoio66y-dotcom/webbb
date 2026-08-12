@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Send, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, Facebook, Instagram, User, MessageSquare, Link2 } from 'lucide-react';
 import { TikTok } from '@/components/icons/TikTok';
 import type { SiteContent } from '@/types';
-import { getTelegramSettingsLocal } from '@/lib/telegramSettings';
 
 interface ContactProps {
   content: SiteContent['contact'];
@@ -38,92 +37,55 @@ export default function Contact({ content }: ContactProps) {
       return;
     }
 
+    const botToken = localStorage.getItem('telegram_bot_token');
+    const chatId = localStorage.getItem('telegram_chat_id');
+
+    if (!botToken || !chatId) {
+      setStatus('error');
+      setErrorMsg('لم يتم العثور على إعدادات تيليجرام. يرجى تهيئتها من لوحة الإدارة أولاً.');
+      return;
+    }
+
     setStatus('sending');
     setErrorMsg('');
 
-    let delivered = false;
-    let lastError = '';
+    const message = [
+      'طلب جديد - ويب ليبيا',
+      '',
+      `الاسم: ${form.name.trim() || '—'}`,
+      `رقم الواتساب: ${form.whatsapp.trim()}`,
+      `رابط المتجر: ${form.storeLink.trim() || 'لا يوجد'}`,
+      '',
+      'تفاصيل الموقع المطلوب:',
+      form.details.trim(),
+      '',
+      `وقت الطلب: ${new Date().toLocaleString('ar-LY', { timeZone: 'Africa/Tripoli' })}`,
+    ].join('\n');
 
-    // Try server-side delivery via edge function first
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-telegram-order`,
+      const tgResponse = await fetch(
+        `https://api.telegram.org/bot${botToken}/sendMessage`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({
-            name: form.name,
-            whatsapp: form.whatsapp,
-            storeLink: form.storeLink,
-            details: form.details,
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: message }),
         }
       );
 
-      if (response.ok) {
-        delivered = true;
+      if (tgResponse.ok) {
+        setStatus('sent');
+        setForm({ name: '', whatsapp: '', storeLink: '', details: '' });
+        setTimeout(() => setStatus('idle'), 5000);
       } else {
-        const errData = await response.json().catch(() => ({}));
-        lastError = errData?.error || `HTTP ${response.status}`;
-        console.error('Server order delivery failed:', lastError);
+        const tgErr = await tgResponse.text();
+        console.error('Telegram API error response:', tgErr);
+        setStatus('error');
+        setErrorMsg('تعذر إرسال الطلب عبر تيليجرام. تحقق من الإعدادات في لوحة الإدارة.');
       }
     } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
-      console.error('Server order delivery error:', err);
-    }
-
-    // Fallback: if server failed, try direct Telegram API using locally-stored settings
-    if (!delivered) {
-      const localSettings = getTelegramSettingsLocal();
-      if (localSettings) {
-        try {
-          const message = [
-            'طلب جديد - ويب ليبيا',
-            '',
-            `الاسم: ${form.name.trim() || '—'}`,
-            `رقم الواتساب: ${form.whatsapp.trim()}`,
-            `رابط المتجر: ${form.storeLink.trim() || 'لا يوجد'}`,
-            '',
-            'تفاصيل الموقع المطلوب:',
-            form.details.trim(),
-            '',
-            `وقت الطلب: ${new Date().toLocaleString('ar-LY', { timeZone: 'Africa/Tripoli' })}`,
-          ].join('\n');
-
-          const tgResponse = await fetch(
-            `https://api.telegram.org/bot${localSettings.botToken}/sendMessage`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: localSettings.chatId, text: message }),
-            }
-          );
-
-          if (tgResponse.ok) {
-            delivered = true;
-          } else {
-            const tgErr = await tgResponse.text();
-            console.error('Direct Telegram delivery failed:', tgResponse.status, tgErr);
-          }
-        } catch (err) {
-          console.error('Direct Telegram delivery error:', err);
-        }
-      } else {
-        console.error('No local Telegram settings found for fallback delivery');
-      }
-    }
-
-    if (delivered) {
-      setStatus('sent');
-      setForm({ name: '', whatsapp: '', storeLink: '', details: '' });
-      setTimeout(() => setStatus('idle'), 5000);
-    } else {
+      console.error('Telegram fetch error:', err);
       setStatus('error');
-      setErrorMsg('تعذر إرسال الطلب. يرجى المحاولة مرة أخرى لاحقاً.');
-      console.error('All order delivery methods failed. Last error:', lastError);
+      setErrorMsg('حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى لاحقاً.');
     }
   };
 
@@ -316,3 +278,6 @@ export default function Contact({ content }: ContactProps) {
     </section>
   );
 }
+
+
+export default Contact
